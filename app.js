@@ -53,6 +53,10 @@ if(config.settings.theme){
         process.exit();
     }
 }
+// check theme directory exists if set
+if(!config.settings.bootstrap){
+    config.settings.bootstrap = "paper";
+}
 
 // view engine setup
 app.set('views', path.join(__dirname, '/views'));
