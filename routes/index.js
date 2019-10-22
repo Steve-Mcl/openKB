@@ -241,19 +241,19 @@ router.get('/' + config.settings.route_name + '/:id', common.restrict, (req, res
             var spoiler = function(title, content, cls) {               
                 return `<details class="${cls}"><summary>${title}</summary>${content}</details><p></p>`
             }
-
-                var mermaidChart = function(code) {
-                    return '<div class="mermaid">'+code+'</div>';
-                }
-                
-                var defFenceRules = markdownit.renderer.rules.fence.bind(markdownit.renderer.rules)
-                markdownit.renderer.rules.fence = function(tokens, idx, options, env, slf) {
-                    var token = tokens[idx]
-                    var code = token.content.trim()
+            
+            var mermaidChart = function(code) {
+                return '<div class="mermaid">'+code+'</div>';
+            }
+            
+            var defFenceRules = markdownit.renderer.rules.fence.bind(markdownit.renderer.rules)
+            markdownit.renderer.rules.fence = function(tokens, idx, options, env, slf) {
+                var token = tokens[idx]
+                var code = token.content.trim()
                 var lang = token.info.trim()
                 if (config.settings.mermaid && lang == 'mermaid') {
-                        return mermaidChart(code)
-                    }
+                    return mermaidChart(code)
+                }
                 if (lang.startsWith('spoiler')) {
                     let title = "click to reveal"; // TODO: i18n
                     if(lang.includes(":")){
@@ -276,7 +276,7 @@ router.get('/' + config.settings.route_name + '/:id', common.restrict, (req, res
                 }
                 return defFenceRules(tokens, idx, options, env, slf);
             }
-
+            
 
             // update kb_viewcount
             db.kb.update({ $or: [{ _id: common.getId(req.params.id) }, { kb_permalink: req.params.id }] },
@@ -1184,11 +1184,23 @@ router.post('/file/upload_file', common.restrict, inline_upload.single('file'), 
     if(req.file){
         // check for upload select
         const upload_dir = path.join(appDir, 'public', 'uploads', 'inline_files');
+        
         const relative_upload_dir = req.app_context + '/uploads/inline_files';
-
+        const mime = req.mime
         const file = req.file;
+        const mimeExt = mime.extension(file.mimetype);
+        const mimetype = mime.lookup(file.originalname);
         const source = fs.createReadStream(file.path);
-        const dest = fs.createWriteStream(path.join(upload_dir, file.originalname));
+        const p = path.parse(file.originalname);
+        const fnTS = '-' + Date.now();
+        var max_fn_len = 247 - upload_dir.length - fnTS.length; //(256 less a bit for ext and drive)
+        if(max_fn_len < 1){
+            console.warn("upload file path and file name length may be a problem!");
+            max_fn_len = 8;//arbitrary value 
+        }
+        const nicefn = common.niceFileName(p.name).substring(0, max_fn_len);
+        const fn = nicefn + fnTS + p.ext; //make file name unique with timestamp but also keep as much of original name as possible
+        const dest = fs.createWriteStream(path.join(upload_dir, fn));
 
         // save the new file
         source.pipe(dest);
@@ -1199,7 +1211,7 @@ router.post('/file/upload_file', common.restrict, inline_upload.single('file'), 
 
         // uploaded
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ 'filename': relative_upload_dir + '/' + file.originalname }));
+        res.end(JSON.stringify({ 'filename': relative_upload_dir + '/' + fn }));
         return;
     }
     res.writeHead(500, { 'Content-Type': 'application/json' });

@@ -146,11 +146,22 @@
       'image/png',
       'image/jpg',
       'image/gif',
+      'application/json',
+      'text/xml',
+      'application/xml',
       'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/vnd.ms-excel',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/pdf'
+      'application/mspowerpoint',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/pdf',
+      'application/x-7z-compressed',
+      'application/zip',
+      'application/gzip',
+      'application/x-bzip',
+      'application/x-bzip2'
     ],
 
     /**
@@ -165,6 +176,8 @@
      * by the filename that has been returned by the server
      */
     urlText: "![file]({filename})",
+
+    fileText: "[file]({filename})",
 
     /**
      * Text which will be used when uploading has failed
@@ -225,6 +238,7 @@
    * @return {XMLHttpRequest} request object which sends the file
    */
   inlineAttachment.prototype.uploadFile = function(file) {
+    debugger
     var me = this,
       formData = new FormData(),
       xhr = new XMLHttpRequest(),
@@ -244,7 +258,7 @@
       }
     }
 
-    var remoteFilename = "image-" + Date.now() + "." + extension;
+    var remoteFilename = file.name || "upload-" + Date.now() + "." + extension;
     if (typeof settings.remoteFilename === 'function') {
       remoteFilename = settings.remoteFilename(file);
     }
@@ -303,15 +317,14 @@
         var extension = file.substr((file.lastIndexOf('.') + 1)).toLowerCase();
         var file_type = "";
         switch (extension) {
-            case 'pdf':
-            case 'doc':
-            case 'docx':
-            case 'xls':
-            case 'xlsx':
-                file_type = "file";
+            case 'jpg':
+            case 'jpeg':
+            case 'png':
+            case 'gif':
+                file_type = "image";
                 break;
             default:
-                file_type = "image";
+                file_type = "file";
         }
         return file_type;
     };

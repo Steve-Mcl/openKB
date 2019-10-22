@@ -223,6 +223,18 @@ exports.getId = function (id){
     }
 };
 
+exports.niceFileName = function(str) {
+    var fn = '';
+    var trimmed = str.trim();
+    fn = trimmed.replace(/[^a-z0-9-æøå\.]/gi, '-').
+    replace(/-+/g, '-').
+    replace(/^-|-$/g, '').
+    replace(/æ/gi, 'ae').
+    replace(/ø/gi, 'oe').
+    replace(/å/gi, 'a');
+    return fn.toLowerCase();
+}
+
 exports.sanitizeHTML = function(html){
     // eslint-disable-next-line no-return-assign
     return sanitizeHtml(html, {
