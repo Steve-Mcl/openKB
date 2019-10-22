@@ -182,6 +182,9 @@ exports.config_expose = function (app){
     clientConfig.links_blank_page = config.settings.links_blank_page !== undefined ? config.settings.links_blank_page : true;
     clientConfig.typeahead_search = config.settings.typeahead_search !== undefined ? config.settings.typeahead_search : true;
     clientConfig.enable_spellchecker = config.settings.enable_spellchecker !== undefined ? config.settings.enable_spellchecker : true;
+    clientConfig.mermaid = config.settings.mermaid !== undefined ? config.settings.mermaid : false;
+    clientConfig.mermaid_options = config.settings.mermaid_options;
+    clientConfig.mermaid_auto_update = config.settings.mermaid_auto_update !== undefined ? config.settings.mermaid_auto_update : true;
     app.expose(clientConfig, 'config');
 };
 
@@ -220,12 +223,25 @@ exports.getId = function (id){
     }
 };
 
+exports.niceFileName = function(str) {
+    var fn = '';
+    var trimmed = str.trim();
+    fn = trimmed.replace(/[^a-z0-9-æøå\.]/gi, '-').
+    replace(/-+/g, '-').
+    replace(/^-|-$/g, '').
+    replace(/æ/gi, 'ae').
+    replace(/ø/gi, 'oe').
+    replace(/å/gi, 'a');
+    return fn.toLowerCase();
+}
+
 exports.sanitizeHTML = function(html){
     // eslint-disable-next-line no-return-assign
     return sanitizeHtml(html, {
         allowedTags: [ 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'p', 'a', 'ul', 'ol',
             'nl', 'li', 'b', 'i', 'strong', 'em', 'strike', 'code', 'hr', 'br', 'div',
-            'table', 'thead', 'caption', 'tbody', 'tr', 'th', 'td', 'pre', 'img', 'iframe'
+            'table', 'thead', 'caption', 'tbody', 'tr', 'th', 'td', 'pre', 'img', 'iframe',
+            'details', 'summary', 'strike', 's'
         ],
         allowedAttributes: false
     });

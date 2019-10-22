@@ -10,8 +10,20 @@ $(document).ready(function(){
     }
 
     // setup mermaid charting
-    if(typeof mermaid !== 'undefined'){
-        mermaid.initialize({startOnLoad: true});
+    if(typeof mermaid !== 'undefined' && config.mermaid){
+        //defaults - can be overridden in config.json by specifying mermaid_options
+        //TODO: Consider adding mermaid_options to settings page? 
+        var mermaid_opts = {
+            "theme" : "forest",
+            "flowchart": { "curve": "linear" },
+            "gantt": { "axisFormat": "%Y/%m/%d" },
+            "sequence": { "actorMargin": 20 },
+            "securityLevel": "loose" 
+        };
+        // Merge mermaid_options into mermaid_opts, recursively
+        $.extend( true, mermaid_opts, config.mermaid_options || {} );
+        mermaid_opts.startOnLoad = true;
+        mermaid.initialize(mermaid_opts);
     }
 
     // add the table class to all tables
@@ -81,6 +93,7 @@ $(document).ready(function(){
     // highlight any code blocks
     $('pre code').each(function(i, block){
         hljs.highlightBlock(block);
+	//return hljs.highlightAuto(code).value;
     });
 
     // add the table class to all tables
@@ -105,28 +118,90 @@ $(document).ready(function(){
         $('#frm_kb_keywords').tokenfield();
     }
 
+
+    function convertTextAreaToMarkdown(firstRender){
+        var rendered = render(simplemde.value());
+        $('#preview').html(rendered);
+        
+        // re-hightlight the preview
+        $('pre code').each(function(i, block){
+            hljs.highlightBlock(block);
+        });
+
+        if(!firstRender && typeof mermaid !== 'undefined' && (config.mermaid && config.mermaid_auto_update)) {
+            mermaid.init();//when this is not first render AND mermaid_auto_update==true, re-init mermaid charts (render code changes)
+        }
+    }
+
+
     if($('#editor').length){
+
         // setup editors
         var simplemde = new SimpleMDE({
             element: $('#editor')[0],
             spellChecker: config.enable_spellchecker,
-            toolbar: ['bold', 'italic', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', '|', 'link', 'image', '|', 'table', 'horizontal-rule', 'code', 'guide']
+            highlight: function(code,lang){
+                //return hljs.highlightAuto(code).value;
+		        return code;
+            },
+            shortcuts:{
+                "selectNextOccurrence": "Ctrl-D", 
+                "addCursorToPrevLine" : "Ctrl-Shift-Up",
+                "addCursorToNextLine" : "Ctrl-Shift-Down",
+                "duplicateLine" : "Shift-Ctrl-D",
+                "addCursorToPrevLine" : "Ctrl-Alt-Up",
+                "addCursorToNextLine" : "Ctrl-Alt-Down",
+                "swapLineUp" : "Shift-Ctrl-Up",
+                "swapLineDown" : "Shift-Ctrl-Down",
+                "replace" : "Ctrl-H",
+                "findNext" : "F3"
+            },
+            renderingConfig:{
+                codeSyntaxHighlighting: true
+            },
+            toolbar: ['bold', 'italic', 'strikethrough', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', '|', 'link', 'image', '|', 'table', 'horizontal-rule', 'code', '|', 'guide'],
+            previewRender: function(plainText) { // sync method
+                console.log("rendering via custom renderer")
+                if(timer != null)
+                    clearTimeout(timer);
+                timer = setTimeout(function(){           
+                    // re-hightlight the preview
+                    $('pre code').each(function(i, block){
+                        hljs.highlightBlock(block);
+                    });
+                    if(!typeof mermaid !== 'undefined' && (config.mermaid && config.mermaid_auto_update)) {
+                        mermaid.init(); 
+                    }                    
+                }, renderDelayTime);
+                return render(plainText);
+            }
         });
 
         // setup inline attachments
         inlineAttachment.editors.codemirror4.attach(simplemde.codemirror, {uploadUrl: $('#app_context').val() + '/file/upload_file'});
-
+        debugger
+        simplemde.codemirror.setOption("keyMap","sublime");
         // do initial convert on load
-        convertTextAreaToMarkdown();
-
-        // attach to editor changes and update preview
-        simplemde.codemirror.on('change', function(){
-            convertTextAreaToMarkdown();
-        });
+        convertTextAreaToMarkdown(true); //true means this is first call - do all rendering    
 
         // auto scrolls the simpleMDE preview pane
         var preview = document.getElementById('preview');
         if(preview !== null){
+
+            //timed re-render (virtual speedup) - i.e. only call convertTextAreaToMarkdown() after xxxms of inactivity to reduce redraws
+            var timer = null;
+            //TODO: Consider adding the renderDelayTime to settings
+            var renderDelayTime = 500;//only re-render when user stops changing text
+            
+            // attach to editor changes and update preview
+            simplemde.codemirror.on('change', function(){
+                if(timer != null)
+                    clearTimeout(timer);
+                timer = setTimeout(function(){
+                    convertTextAreaToMarkdown(false);//pass false to indicate this call is due to a code change
+                }, renderDelayTime);
+            });
+
             // Syncs scroll  editor -> preview
             var cScroll = false;
             var pScroll = false;
@@ -244,32 +319,99 @@ $(document).ready(function(){
     });
 
     // convert editor markdown to HTML and display in #preview div
-    function convertTextAreaToMarkdown(){
+    //firstRender indicates this is a first call (i.e. not a re-render request due to a code editor change) 
+    function render(plainText){
         var classy = window.markdownItClassy;
 
-        var mark_it_down = window.markdownit({html: true, linkify: true, typographer: true, breaks: true});
+        var mark_it_down = window.markdownit({html: true, linkify: true, typographer: true, breaks: true}).enable([
+            'autolink',      // Automatically convert link text surrounded by angle brackets to <a> tags
+            'backticks',     // Allow inline code blocks using backticks
+            'blockquote',    // > I am a blockquote becomes <blockquote>I am a blockquote</blockquote>
+            'code',          // Code block (4 spaces padded)
+            'emphasis',      // *Emphasize* _emphasize_ **Strong** __Strong__
+            'entity',        // Parse HTML entities e.g. &amp;
+            'escape',        // Automatically escape special characters.
+            'fence',         // Fenced code blocks
+            'heading',       // # Foo becomes <h1>Foo</h1>. ###### becomes <h6>Foo</h6>
+            'hr',            // ***, --- and ___ produce a <hr> tag.
+            'html_block',    // Enable / disable HTML blocks.
+            'html_inline',   // Enable / disable inline HTML.
+            'image',          // Enable / disable inline images.
+            'lheading',      // Use === or --- underneath text for h1 and h2 blocks.
+            'link',          // Process [link](<to> "stuff")
+            'linkify',       // Replace link-like texts with link nodes.
+            'list',          // Ordered and unordered lists.
+            'newline',       // '  \n' -> <br>
+            'normalize',     // Replace newlines with \n, null characters and convert tabs to spaces.
+            'paragraph',      // Use blank lines to indicate a paragraph.
+            'reference',     // Reference style links e.g. [an example][id] reference-style link... further down in the document [id]: http://example.com/  "Optional Title Here"
+            'strikethrough', // ~~strike through~~
+            'table',         // GFM style tables
+            'text_collapse', // Merge adjacent text nodes into one, and re-calculate all token levels
+        ]);
         mark_it_down.use(classy);
-        var html = mark_it_down.render(simplemde.value());
+
+        var spoiler = function(title, content, cls) {               
+            return `<details class="${cls}"><summary>${title}</summary>${content}</details><p></p>`
+        }
+        var mermaidChart = function(code) {
+            try {
+                mermaid.parse(code)
+                return '<div class="mermaid">'+code+'</div>';
+            } catch ({ str, hash }) {
+                return '<pre><code>'+code+'</code></pre>';
+            }
+        }
+        var useMermaid = typeof mermaid !== 'undefined' && config.mermaid;
+        var defFenceRules = mark_it_down.renderer.rules.fence.bind(mark_it_down.renderer.rules)
+        mark_it_down.renderer.rules.fence = function(tokens, idx, options, env, slf) {
+            var token = tokens[idx]
+            var code = token.content.trim()
+            var lang = token.info.trim()
+            if (useMermaid && lang == 'mermaid') {
+                return mermaidChart(code)
+            }
+            if (lang.startsWith('spoiler')) {
+                let title = "click to reveal"; // TODO: i18n
+                if(lang.includes(":")){
+                    var spl = lang.split(":");
+                    title = spl[1];
+                }
+                return spoiler(title, code, "spoiler")
+            }
+            if (lang.startsWith('secret')) {
+                //as the page is being edited, we assume this user has access (i.e. render it like a logged in admin would see)!
+                let title = "click to reveal"; // TODO: i18n
+                if(lang.includes(":")){
+                    var spl = lang.split(":");
+                    title = spl[1];
+                }
+                return spoiler(title, code, "secret");
+            }
+            return defFenceRules(tokens, idx, options, env, slf);
+        }    
+        
+        
 
         // add responsive images and tables
+        var html = mark_it_down.render(plainText);
         var fixed_html = html.replace(/<img/g, "<img class='img-responsive' ");
         fixed_html = fixed_html.replace(/<table/g, "<table class='table table-hover' ");
 
         var cleanHTML = sanitizeHtml(fixed_html, {
             allowedTags: [ 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'p', 'a', 'ul', 'ol',
                 'nl', 'li', 'b', 'i', 'strong', 'em', 'strike', 'code', 'hr', 'br', 'div',
-                'table', 'thead', 'caption', 'tbody', 'tr', 'th', 'td', 'pre', 'img', 'iframe'
+                'table', 'thead', 'caption', 'tbody', 'tr', 'th', 'td', 'pre', 'img', 'iframe',
+                'details', 'summary', 'strike', 's'
             ],
             allowedAttributes: false
-        });
+        });            
+       
 
-        $('#preview').html(cleanHTML);
+        return cleanHTML;
 
-        // re-hightlight the preview
-        $('pre code').each(function(i, block){
-            hljs.highlightBlock(block);
-        });
     }
+
 
     // user up vote clicked
     $(document).on('click', '#btnUpvote', function(){

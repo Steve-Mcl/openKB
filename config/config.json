@@ -41,6 +41,7 @@
         "api_allowed": false,
         "locale": "en",
         "env": "",
+        "bootstrap": "lumen",
         "style": {
             "cssHeaderBackgroundColor": "",
             "cssHeaderTextColor": "",

@@ -6,7 +6,33 @@ const bodyParser = require('body-parser');
 const Nedb = require('nedb');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
-const markdownit = require('markdown-it')({ html: true, linkify: true, typographer: true });
+const mime = require('mime');
+const markdownit = require('markdown-it')({ html: true, linkify: true, typographer: true, breaks: true }).enable([
+    'autolink',      // Automatically convert link text surrounded by angle brackets to <a> tags
+    'backticks',     // Allow inline code blocks using backticks
+    'blockquote',    // > I am a blockquote becomes <blockquote>I am a blockquote</blockquote>
+    'code',          // Code block (4 spaces padded)
+    'emphasis',      // *Emphasize* _emphasize_ **Strong** __Strong__
+    'entity',        // Parse HTML entities e.g. &amp;
+    'escape',        // Automatically escape special characters.
+    'fence',         // Fenced code blocks
+    'heading',       // # Foo becomes <h1>Foo</h1>. ###### becomes <h6>Foo</h6>
+    'hr',            // ***, --- and ___ produce a <hr> tag.
+    'html_block',    // Enable / disable HTML blocks.
+    'html_inline',   // Enable / disable inline HTML.
+    'image',          // Enable / disable inline images.
+    'lheading',      // Use === or --- underneath text for h1 and h2 blocks.
+    'link',          // Process [link](<to> "stuff")
+    'linkify',       // Replace link-like texts with link nodes.
+    'list',          // Ordered and unordered lists.
+    'newline',       // '  \n' -> <br>
+    'normalize',     // Replace newlines with \n, null characters and convert tabs to spaces.
+    'paragraph',      // Use blank lines to indicate a paragraph.
+    'reference',     // Reference style links e.g. [an example][id] reference-style link... further down in the document [id]: http://example.com/  "Optional Title Here"
+    'strikethrough', // ~~strike through~~
+    'table',         // GFM style tables
+    'text_collapse', // Merge adjacent text nodes into one, and re-calculate all token levels
+]);
 const moment = require('moment');
 const fs = require('fs');
 const Nedb_store = require('nedb-session-store')(session);
@@ -52,6 +78,10 @@ if(config.settings.theme){
         console.error('Theme folder does not exist. Please check theme in /config/config.json');
         process.exit();
     }
+}
+// check theme directory exists if set
+if(!config.settings.bootstrap){
+    config.settings.bootstrap = "paper";
 }
 
 // view engine setup
@@ -238,6 +268,7 @@ app.use(app_context + '/jquery', express.static(path.join(__dirname, 'node_modul
 app.use(app_context + '/bootstrap', express.static(path.join(__dirname, 'node_modules/bootstrap/dist/')));
 app.use(app_context + '/bootstrapTabs', express.static(path.join(__dirname, 'node_modules/bootstrap/js/')));
 app.use(app_context + '/simplemde', express.static(path.join(__dirname, 'node_modules/simplemde/dist/')));
+app.use(app_context + '/codemirror', express.static(path.join(__dirname, 'node_modules/codemirror/')));
 app.use(app_context + '/markdown-it', express.static(path.join(__dirname, 'node_modules/markdown-it/dist/')));
 app.use(app_context + '/stylesheets', express.static(path.join(__dirname, 'public/stylesheets')));
 app.use(app_context + '/fonts', express.static(path.join(__dirname, 'public/fonts')));
@@ -251,6 +282,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Make stuff accessible to our router
 app.use((req, res, next) => {
     req.markdownit = markdownit;
+    req.mime = mime;
     req.handlebars = handlebars.helpers;
     req.bcrypt = bcrypt;
     req.i18n = i18n;
