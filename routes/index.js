@@ -238,9 +238,10 @@ router.get('/' + config.settings.route_name + '/:id', common.restrict, (req, res
                 new_viewcount = old_viewcount + 1;
             }
 
+            var spoiler = function(title, content, cls) {               
+                return `<details class="${cls}"><summary>${title}</summary>${content}</details><p></p>`
+            }
 
-            if(config.settings.mermaid){
-            
                 var mermaidChart = function(code) {
                     return '<div class="mermaid">'+code+'</div>';
                 }
@@ -249,16 +250,33 @@ router.get('/' + config.settings.route_name + '/:id', common.restrict, (req, res
                 markdownit.renderer.rules.fence = function(tokens, idx, options, env, slf) {
                     var token = tokens[idx]
                     var code = token.content.trim()
-                    if (token.info === 'mermaid') {
+                var lang = token.info.trim()
+                if (config.settings.mermaid && lang == 'mermaid') {
                         return mermaidChart(code)
                     }
-                    var firstLine = code.split(/\n/)[0].trim()
-                    if (firstLine === 'gantt' || firstLine === 'sequenceDiagram' || firstLine.match(/^graph (?:TB|BT|RL|LR|TD);?$/)) {
-                        return mermaidChart(code)
+                if (lang.startsWith('spoiler')) {
+                    let title = "click to reveal"; // TODO: i18n
+                    if(lang.includes(":")){
+                        var spl = lang.split(":");
+                        title = spl[1];
                     }
-                    return defFenceRules(tokens, idx, options, env, slf)
+                    return spoiler(title, code, "spoiler")
                 }
+                if (lang.startsWith('secret')) {
+                    let details = code
+                    if(req.session.is_admin == "true"){
+                        details = "**LOG TO SEE**";//TODO: i18n
+                    }
+                    let title = "click to reveal"; // TODO: i18n
+                    if(lang.includes(":")){
+                        var spl = lang.split(":");
+                        title = spl[1];
+                    }
+                    return spoiler(title, details, "secret");
+                }
+                return defFenceRules(tokens, idx, options, env, slf);
             }
+
 
             // update kb_viewcount
             db.kb.update({ $or: [{ _id: common.getId(req.params.id) }, { kb_permalink: req.params.id }] },

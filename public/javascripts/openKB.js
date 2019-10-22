@@ -93,6 +93,7 @@ $(document).ready(function(){
     // highlight any code blocks
     $('pre code').each(function(i, block){
         hljs.highlightBlock(block);
+	//return hljs.highlightAuto(code).value;
     });
 
     // add the table class to all tables
@@ -117,17 +118,69 @@ $(document).ready(function(){
         $('#frm_kb_keywords').tokenfield();
     }
 
+
+    function convertTextAreaToMarkdown(firstRender){
+        var rendered = render(simplemde.value());
+        $('#preview').html(rendered);
+        
+        // re-hightlight the preview
+        $('pre code').each(function(i, block){
+            hljs.highlightBlock(block);
+        });
+
+        if(!firstRender && typeof mermaid !== 'undefined' && (config.mermaid && config.mermaid_auto_update)) {
+            mermaid.init();//when this is not first render AND mermaid_auto_update==true, re-init mermaid charts (render code changes)
+        }
+    }
+
+
     if($('#editor').length){
+
         // setup editors
         var simplemde = new SimpleMDE({
             element: $('#editor')[0],
             spellChecker: config.enable_spellchecker,
-            toolbar: ['bold', 'italic', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', '|', 'link', 'image', '|', 'table', 'horizontal-rule', 'code', 'guide']
+            highlight: function(code,lang){
+                //return hljs.highlightAuto(code).value;
+		        return code;
+            },
+            shortcuts:{
+                "selectNextOccurrence": "Ctrl-D", 
+                "addCursorToPrevLine" : "Ctrl-Shift-Up",
+                "addCursorToNextLine" : "Ctrl-Shift-Down",
+                "duplicateLine" : "Shift-Ctrl-D",
+                "addCursorToPrevLine" : "Ctrl-Alt-Up",
+                "addCursorToNextLine" : "Ctrl-Alt-Down",
+                "swapLineUp" : "Shift-Ctrl-Up",
+                "swapLineDown" : "Shift-Ctrl-Down",
+                "replace" : "Ctrl-H",
+                "findNext" : "F3"
+            },
+            renderingConfig:{
+                codeSyntaxHighlighting: true
+            },
+            toolbar: ['bold', 'italic', 'strikethrough', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', '|', 'link', 'image', '|', 'table', 'horizontal-rule', 'code', '|', 'guide'],
+            previewRender: function(plainText) { // sync method
+                console.log("rendering via custom renderer")
+                if(timer != null)
+                    clearTimeout(timer);
+                timer = setTimeout(function(){           
+                    // re-hightlight the preview
+                    $('pre code').each(function(i, block){
+                        hljs.highlightBlock(block);
+                    });
+                    if(!typeof mermaid !== 'undefined' && (config.mermaid && config.mermaid_auto_update)) {
+                        mermaid.init(); 
+                    }                    
+                }, renderDelayTime);
+                return render(plainText);
+            }
         });
 
         // setup inline attachments
         inlineAttachment.editors.codemirror4.attach(simplemde.codemirror, {uploadUrl: $('#app_context').val() + '/file/upload_file'});
-
+        debugger
+        simplemde.codemirror.setOption("keyMap","sublime");
         // do initial convert on load
         convertTextAreaToMarkdown(true); //true means this is first call - do all rendering    
 
@@ -267,64 +320,98 @@ $(document).ready(function(){
 
     // convert editor markdown to HTML and display in #preview div
     //firstRender indicates this is a first call (i.e. not a re-render request due to a code editor change) 
-    function convertTextAreaToMarkdown(firstRender){
+    function render(plainText){
         var classy = window.markdownItClassy;
 
-        var mark_it_down = window.markdownit({html: true, linkify: true, typographer: true, breaks: true});
+        var mark_it_down = window.markdownit({html: true, linkify: true, typographer: true, breaks: true}).enable([
+            'autolink',      // Automatically convert link text surrounded by angle brackets to <a> tags
+            'backticks',     // Allow inline code blocks using backticks
+            'blockquote',    // > I am a blockquote becomes <blockquote>I am a blockquote</blockquote>
+            'code',          // Code block (4 spaces padded)
+            'emphasis',      // *Emphasize* _emphasize_ **Strong** __Strong__
+            'entity',        // Parse HTML entities e.g. &amp;
+            'escape',        // Automatically escape special characters.
+            'fence',         // Fenced code blocks
+            'heading',       // # Foo becomes <h1>Foo</h1>. ###### becomes <h6>Foo</h6>
+            'hr',            // ***, --- and ___ produce a <hr> tag.
+            'html_block',    // Enable / disable HTML blocks.
+            'html_inline',   // Enable / disable inline HTML.
+            'image',          // Enable / disable inline images.
+            'lheading',      // Use === or --- underneath text for h1 and h2 blocks.
+            'link',          // Process [link](<to> "stuff")
+            'linkify',       // Replace link-like texts with link nodes.
+            'list',          // Ordered and unordered lists.
+            'newline',       // '  \n' -> <br>
+            'normalize',     // Replace newlines with \n, null characters and convert tabs to spaces.
+            'paragraph',      // Use blank lines to indicate a paragraph.
+            'reference',     // Reference style links e.g. [an example][id] reference-style link... further down in the document [id]: http://example.com/  "Optional Title Here"
+            'strikethrough', // ~~strike through~~
+            'table',         // GFM style tables
+            'text_collapse', // Merge adjacent text nodes into one, and re-calculate all token levels
+        ]);
         mark_it_down.use(classy);
 
-        if(typeof mermaid !== 'undefined' && config.mermaid){
-            
-            var mermaidChart = function(code) {
-                try {
-                    mermaid.parse(code)
-                    return '<div class="mermaid">'+code+'</div>';
-                } catch ({ str, hash }) {
-                    return '<pre><code>'+code+'</code></pre>';
-                }
-            }
-            
-            var defFenceRules = mark_it_down.renderer.rules.fence.bind(mark_it_down.renderer.rules)
-            mark_it_down.renderer.rules.fence = function(tokens, idx, options, env, slf) {
-            var token = tokens[idx]
-            var code = token.content.trim()
-            if (token.info === 'mermaid') {
-                return mermaidChart(code)
-            }
-            var firstLine = code.split(/\n/)[0].trim()
-            if (firstLine === 'gantt' || firstLine === 'sequenceDiagram' || firstLine.match(/^graph (?:TB|BT|RL|LR|TD);?$/)) {
-                return mermaidChart(code)
-            }
-            return defFenceRules(tokens, idx, options, env, slf)
+        var spoiler = function(title, content, cls) {               
+            return `<details class="${cls}"><summary>${title}</summary>${content}</details><p></p>`
+        }
+        var mermaidChart = function(code) {
+            try {
+                mermaid.parse(code)
+                return '<div class="mermaid">'+code+'</div>';
+            } catch ({ str, hash }) {
+                return '<pre><code>'+code+'</code></pre>';
             }
         }
-
-        var html = mark_it_down.render(simplemde.value());
+        var useMermaid = typeof mermaid !== 'undefined' && config.mermaid;
+        var defFenceRules = mark_it_down.renderer.rules.fence.bind(mark_it_down.renderer.rules)
+        mark_it_down.renderer.rules.fence = function(tokens, idx, options, env, slf) {
+            var token = tokens[idx]
+            var code = token.content.trim()
+            var lang = token.info.trim()
+            if (useMermaid && lang == 'mermaid') {
+                return mermaidChart(code)
+            }
+            if (lang.startsWith('spoiler')) {
+                let title = "click to reveal"; // TODO: i18n
+                if(lang.includes(":")){
+                    var spl = lang.split(":");
+                    title = spl[1];
+                }
+                return spoiler(title, code, "spoiler")
+            }
+            if (lang.startsWith('secret')) {
+                //as the page is being edited, we assume this user has access (i.e. render it like a logged in admin would see)!
+                let title = "click to reveal"; // TODO: i18n
+                if(lang.includes(":")){
+                    var spl = lang.split(":");
+                    title = spl[1];
+                }
+                return spoiler(title, code, "secret");
+            }
+            return defFenceRules(tokens, idx, options, env, slf);
+        }    
+        
+        
 
         // add responsive images and tables
+        var html = mark_it_down.render(plainText);
         var fixed_html = html.replace(/<img/g, "<img class='img-responsive' ");
         fixed_html = fixed_html.replace(/<table/g, "<table class='table table-hover' ");
 
         var cleanHTML = sanitizeHtml(fixed_html, {
             allowedTags: [ 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'p', 'a', 'ul', 'ol',
                 'nl', 'li', 'b', 'i', 'strong', 'em', 'strike', 'code', 'hr', 'br', 'div',
-                'table', 'thead', 'caption', 'tbody', 'tr', 'th', 'td', 'pre', 'img', 'iframe'
+                'table', 'thead', 'caption', 'tbody', 'tr', 'th', 'td', 'pre', 'img', 'iframe',
+                'details', 'summary', 'strike', 's'
             ],
             allowedAttributes: false
-        });
+        });            
+       
 
-        $('#preview').html(cleanHTML);
-
-        // re-hightlight the preview
-        $('pre code').each(function(i, block){
-            hljs.highlightBlock(block);
-        });
-
-        if(!firstRender && typeof mermaid !== 'undefined' && (config.mermaid && config.mermaid_auto_update)) {
-            mermaid.init();//when this is not first render AND mermaid_auto_update==true, re-init mermaid charts (render code changes)
-        }
+        return cleanHTML;
 
     }
+
 
     // user up vote clicked
     $(document).on('click', '#btnUpvote', function(){
