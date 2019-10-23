@@ -137,50 +137,30 @@ $(document).ready(function(){
     if($('#editor').length){
 
         // setup editors
-        var simplemde = new SimpleMDE({
+        var simplemde = new EasyMDE({
             element: $('#editor')[0],
             spellChecker: config.enable_spellchecker,
-            highlight: function(code,lang){
-                //return hljs.highlightAuto(code).value;
-		        return code;
-            },
-            shortcuts:{
-                "selectNextOccurrence": "Ctrl-D", 
-                "addCursorToPrevLine" : "Ctrl-Shift-Up",
-                "addCursorToNextLine" : "Ctrl-Shift-Down",
-                "duplicateLine" : "Shift-Ctrl-D",
-                "addCursorToPrevLine" : "Ctrl-Alt-Up",
-                "addCursorToNextLine" : "Ctrl-Alt-Down",
-                "swapLineUp" : "Shift-Ctrl-Up",
-                "swapLineDown" : "Shift-Ctrl-Down",
-                "replace" : "Ctrl-H",
-                "findNext" : "F3"
-            },
-            renderingConfig:{
-                codeSyntaxHighlighting: true
-            },
-            toolbar: ['bold', 'italic', 'strikethrough', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', '|', 'link', 'image', '|', 'table', 'horizontal-rule', 'code', '|', 'guide'],
-            previewRender: function(plainText) { // sync method
-                console.log("rendering via custom renderer")
-                if(timer != null)
-                    clearTimeout(timer);
-                timer = setTimeout(function(){           
-                    // re-hightlight the preview
-                    $('pre code').each(function(i, block){
-                        hljs.highlightBlock(block);
-                    });
-                    if(!typeof mermaid !== 'undefined' && (config.mermaid && config.mermaid_auto_update)) {
-                        mermaid.init(); 
-                    }                    
-                }, renderDelayTime);
-                return render(plainText);
-            }
+            //toolbar: ['bold', 'italic', 'strikethrough', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', '|', 'link', 'image', '|', 'table', 'horizontal-rule', 'code', '|', 'guide'],
         });
 
         // setup inline attachments
         inlineAttachment.editors.codemirror4.attach(simplemde.codemirror, {uploadUrl: $('#app_context').val() + '/file/upload_file'});
-        debugger
-        simplemde.codemirror.setOption("keyMap","sublime");
+
+        var codemirror = simplemde.codemirror;
+        var keys = codemirror.getOption("extraKeys");// get shortcuts list
+        // add own's ...
+        keys["Ctrl-D"] = function(){ 
+              console.log("it work")
+        };
+        // update shortcuts list
+        codemirror.setOption("extraKeys", keys);
+
+        simplemde.codemirror.setOption("extraKeys",{
+            "Ctrl-D":"selectNextOccurrence",
+            "Ctrl-Alt-Up": "addCursorToPrevLine",
+            "Ctrl-Alt-Down": "addCursorToNextLine",
+        });
+
         // do initial convert on load
         convertTextAreaToMarkdown(true); //true means this is first call - do all rendering    
 

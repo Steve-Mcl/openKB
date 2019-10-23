@@ -267,7 +267,7 @@ app.use(app_context + '/font-awesome', express.static(path.join(__dirname, 'node
 app.use(app_context + '/jquery', express.static(path.join(__dirname, 'node_modules/jquery/dist/')));
 app.use(app_context + '/bootstrap', express.static(path.join(__dirname, 'node_modules/bootstrap/dist/')));
 app.use(app_context + '/bootstrapTabs', express.static(path.join(__dirname, 'node_modules/bootstrap/js/')));
-app.use(app_context + '/simplemde', express.static(path.join(__dirname, 'node_modules/simplemde/dist/')));
+app.use(app_context + '/easymde', express.static(path.join(__dirname, 'node_modules/easymde/dist/')));
 app.use(app_context + '/codemirror', express.static(path.join(__dirname, 'node_modules/codemirror/')));
 app.use(app_context + '/markdown-it', express.static(path.join(__dirname, 'node_modules/markdown-it/dist/')));
 app.use(app_context + '/stylesheets', express.static(path.join(__dirname, 'public/stylesheets')));
@@ -313,6 +313,7 @@ app.use((req, res, next) => {
 // will print stacktrace
 if(app.get('env') === 'development'){
     app.use((err, req, res, next) => {
+        console.warn(err.message, req.path);
         console.error(err.stack);
         res.status(err.status || 500);
         res.render('error', {
